@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
@@ -8,18 +9,28 @@ namespace SeedsUnpacked
 {
 	public sealed class ModEntry : Mod
 	{
-		private static readonly string[] InvalidSeeds =
+		public class SeedDataModel
 		{
-			"Spring",
-			"Summer",
-			"Fall",
-			"Winter",
-			"Mixed",
-			"Sesame",
-			"Sunflower",
-		};
+			public SeedDataEntry Include;
+			public SeedDataEntry Exclude;
+		}
 
-		const string AssetKey = @"Maps/springobjects";
+		public class SeedDataEntry
+		{
+			public string[] Prefix;
+			public string[] Suffix;
+			public string[] Name;
+		}
+
+		///      v v v v v v v v v v v v
+
+		// Target used for edits to mod seed data from other mods
+		public const string GameSeedDataAssetKey = @"Mods/blueberry.SeedsUnpacked/Seeds";
+
+		//      ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+
+		private const string LocalSeedDataAssetKey = @"assets/seeds.json";
+		private const string TargetAssetKey = @"Maps/springobjects";
 
 		public override void Entry(IModHelper helper)
 		{
@@ -29,13 +40,23 @@ namespace SeedsUnpacked
 
 		private void OnSaveLoaded(object sender, StardewModdingAPI.Events.SaveLoadedEventArgs e)
 		{
-			this.Helper.GameContent.InvalidateCache(ModEntry.AssetKey);
+			// Ensure seed assets are edited on load
+			this.Helper.GameContent.InvalidateCache(ModEntry.TargetAssetKey);
 		}
 
 		private void OnAssetRequested(object sender, StardewModdingAPI.Events.AssetRequestedEventArgs e)
 		{
-			if (Game1.objectInformation is not null && Game1.cropSpriteSheet is not null && e.NameWithoutLocale.IsEquivalentTo(ModEntry.AssetKey))
+			if (e.NameWithoutLocale.IsEquivalentTo(ModEntry.GameSeedDataAssetKey))
 			{
+				// Load seed data
+				e.LoadFromModFile<SeedDataModel>(relativePath: ModEntry.LocalSeedDataAssetKey, priority: StardewModdingAPI.Events.AssetLoadPriority.Medium);
+			}
+			else if (e.NameWithoutLocale.IsEquivalentTo(ModEntry.TargetAssetKey)
+				&& Game1.objectInformation is not null
+				&& Game1.cropSpriteSheet is not null
+				)
+			{
+				// Edit seed assets
 				e.Edit(apply: this.Edit);
 			}
 		}
@@ -44,29 +65,42 @@ namespace SeedsUnpacked
 		{
 			try
 			{
+				// Reload seed data on each edit to allow for input from other mods
+				SeedDataModel seeds = this.Helper.ModContent.Load<SeedDataModel>(ModEntry.LocalSeedDataAssetKey);
+				Dictionary<int, string> crops = this.Helper.GameContent.Load<Dictionary<int, string>>(@"Data/Crops");
+
+				// Replace each valid seed in object spritesheet with matching source from crops spritesheet
 				foreach (int id in Game1.objectInformation.Keys.Where((int id) => Game1.objectInformation[id].Split('/') is string[] split
-					// No starters or saplings (stage 0 is taller than 16px):
-					&& (split[0].ToLower().EndsWith("seeds") || split[0].ToLower().EndsWith("bulb"))
-					// No non-standard (multiple possible harvest) seeds:
-					&& ModEntry.InvalidSeeds.All((string prefix) => !split[0].StartsWith(prefix))
-					// No trellis seeds (stage 0 is taller than 16px):
-					&& !split[5].EndsWith("trellis.")))
+					// Crop seeds
+					&& crops.ContainsKey(id)
+					// Inclusions
+					&& (seeds.Include.Name.Any((string name) => split[0].Equals(name, StringComparison.InvariantCultureIgnoreCase))
+						|| seeds.Include.Prefix.Any((string prefix) => split[0].StartsWith(prefix, StringComparison.InvariantCultureIgnoreCase))
+						|| seeds.Include.Suffix.Any((string suffix) => split[0].EndsWith(suffix, StringComparison.InvariantCultureIgnoreCase)))
+					// Exclusions
+					&& seeds.Exclude.Name.All((string name) => !split[0].Equals(name, StringComparison.InvariantCultureIgnoreCase))
+					&& seeds.Exclude.Prefix.All((string prefix) => !split[0].StartsWith(prefix, StringComparison.InvariantCultureIgnoreCase))
+					&& seeds.Exclude.Suffix.All((string suffix) => !split[0].EndsWith(suffix, StringComparison.InvariantCultureIgnoreCase))))
 				{
 					try
 					{
+						// Create dummy crop to fetch source area
 						Crop crop = new(seedIndex: id, tileX: 0, tileY: 0);
 
+						// Adjust source area for probable position of seed sprite
 						Rectangle source = crop.getSourceRect(number: 0);
 						source.Y += source.Height - Game1.smallestTileSize;
 						source.Height = Game1.smallestTileSize;
 						source.Width = Game1.smallestTileSize;
 
+						// Fetch matching target area in object spritesheet
 						Rectangle target = Game1.getSourceRectForStandardTileSheet(
 							tileSheet: Game1.objectSpriteSheet,
 							tilePosition: id,
 							width: source.Width,
 							height: source.Height);
 
+						// Replace object sprite with crop sprite
 						asset.AsImage().PatchImage(
 							source: Game1.cropSpriteSheet,
 							sourceArea: source,
