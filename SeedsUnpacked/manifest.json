@@ -5,6 +5,6 @@
     "Description": "Seeds appear loose, rather than in packets.",
     "UniqueID": "blueberry.SeedsUnpacked",
     "EntryDll": "SeedsUnpacked.dll",
-    "MinimumApiVersion": "3.0.0",
+    "MinimumApiVersion": "3.14.0",
     "UpdateKeys": [ "Nexus:7215" ]
 }
