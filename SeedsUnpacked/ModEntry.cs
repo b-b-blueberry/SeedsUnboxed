@@ -16,6 +16,7 @@ namespace SeedsUnpacked
 			"Winter",
 			"Mixed",
 			"Sesame",
+			"Sunflower",
 		};
 
 		public override void Entry(IModHelper helper)
