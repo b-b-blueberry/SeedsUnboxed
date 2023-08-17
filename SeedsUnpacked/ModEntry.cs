@@ -32,7 +32,7 @@ namespace SeedsUnpacked
 		public void Edit<T>(IAssetData asset)
 		{
 			foreach (var id in Game1.objectInformation.Keys.Where(id => Game1.objectInformation[id].Split('/') is string[] split
-				&& (split[0].EndsWith("Seeds") || split[0].EndsWith("Bulb")) // No starters or saplings (stage 0 is taller than 16px)
+				&& (split[0].ToLower().EndsWith("seeds") || split[0].ToLower().EndsWith("bulb")) // No starters or saplings (stage 0 is taller than 16px)
 				&& InvalidSeeds.All(prefix => !split[0].StartsWith(prefix)) // No non-standard (multiple possible harvest) seeds
 				&& !split[5].EndsWith("trellis."))) // No trellis seeds (stage 0 is taller than 16px)
 			{
